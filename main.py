@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-st.set_page_config(page_title="Inmaculada Coffee Farms - Asistente", layout="centered")
+st.set_page_config(page_title="SAFI - Asistente", layout="centered")
 st.title("☕ Asistente SAFI")
 
 api_key = os.environ.get("GROQ_API_KEY")
