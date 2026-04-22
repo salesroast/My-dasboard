@@ -1,19 +1,27 @@
 import os
+import streamlit as st
 from groq import Groq
+from dotenv import load_dotenv
 
-# Esto buscará la llave que pondremos en Render después
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+load_dotenv()  # Carga el .env solo en local; en Render usa las vars de entorno reales
 
-def hablar_con_groq(mensaje):
-    chat_completion = client.chat.completions.create(
-        messages=[
-            {
-                "role": "user",
-                "content": mensaje,
-            }
-        ],
-        model="llama3-8b-8192",
-    )
-    return chat_completion.choices[0].message.content
+st.set_page_config(page_title="Mi Dashboard IA", layout="centered")
+st.title("🤖 Mi Dashboard con Groq")
 
-print("¡IA de Groq lista!")
+api_key = os.environ.get("GROQ_API_KEY")
+
+if not api_key:
+    st.error("⚠️ La API Key de Groq no está configurada.")
+    st.stop()  # Detiene la app aquí para que el error sea obvio
+else:
+    client = Groq(api_key=api_key)
+    
+    mensaje_usuario = st.text_input("Escríbele algo a la Inteligencia Artificial:")
+    
+    if st.button("Enviar mensaje"):
+        with st.spinner("La IA está pensando..."):
+            chat_completion = client.chat.completions.create(
+                messages=[{"role": "user", "content": mensaje_usuario}],
+                model="llama3-8b-8192",
+            )
+            st.success(chat_completion.choices[0].message.content)
