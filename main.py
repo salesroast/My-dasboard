@@ -20,9 +20,9 @@ client = Groq(api_key=api_key)
 with st.expander("⚙️ Configurar personalidad del asistente", expanded=False):
     system_prompt = st.text_area(
         "System Prompt (instrucciones para la IA):",
-        value="""Eres el asistente virtual oficial de Inmaculada Coffee Farms, 
-una finca cafetera colombiana de especialidad. Tu trabajo es responder 
-mensajes de clientes por Instagram de forma amable, profesional y concisa.
+        value="""Eres el asistente virtual oficial de Safi Coffee Roasters, 
+una tostadora de cafe de especialidad en cali, Colombia. Tu trabajo es responder 
+mensajes de clientes por Instagram de forma amable, profesional y concisa siempre con el objetivo de vender.
 
 INFORMACIÓN DEL NEGOCIO:
 - Vendemos café de especialidad en grano entero y molido
