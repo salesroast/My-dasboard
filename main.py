@@ -109,7 +109,7 @@ TONO: Cálido, apasionado por el café. Máximo 3-4 oraciones. Responde en el id
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
 
-    mensaje_usuario = st.chat_input("Escribe un mensaje como cliente de Instagram...")
+    mensaje_usuario = st.chat_input("Escribe un mensaje como cliente...")
 
     if mensaje_usuario:
         st.session_state.mensajes.append({"role": "user", "content": mensaje_usuario})
