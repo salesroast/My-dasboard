@@ -12,8 +12,8 @@ SHOPIFY_SHOP_DOMAIN = os.environ.get("SHOPIFY_SHOP_DOMAIN")
 SHOPIFY_CLIENT_ID = os.environ.get("SHOPIFY_CLIENT_ID")
 SHOPIFY_CLIENT_SECRET = os.environ.get("SHOPIFY_CLIENT_SECRET")
 
-st.set_page_config(page_title="Inmaculada Coffee Farms", layout="wide")
-st.title("☕ Inmaculada Coffee Farms — Dashboard")
+st.set_page_config(page_title="Safi Coffee Roasters", layout="wide")
+st.title("☕ Safi Coffee Roasters — Dashboard")
 
 if not GROQ_API_KEY:
     st.error("⚠️ GROQ_API_KEY no configurada.")
