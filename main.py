@@ -24,14 +24,16 @@ client = Groq(api_key=GROQ_API_KEY)
 # --- Funciones Shopify ---
 @st.cache_data(ttl=300)
 def get_products():
+    token = os.environ.get("SHOPIFY_ACCESS_TOKEN")
     url = f"https://{SHOPIFY_SHOP_DOMAIN}/admin/api/2024-01/products.json?limit=50"
-    r = requests.get(url, auth=(SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET))
+    r = requests.get(url, headers={"X-Shopify-Access-Token": token})
     return r.json().get("products", []) if r.status_code == 200 else []
 
 @st.cache_data(ttl=300)
 def get_orders():
+    token = os.environ.get("SHOPIFY_ACCESS_TOKEN")
     url = f"https://{SHOPIFY_SHOP_DOMAIN}/admin/api/2024-01/orders.json?limit=50&status=any"
-    r = requests.get(url, auth=(SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET))
+    r = requests.get(url, headers={"X-Shopify-Access-Token": token})
     return r.json().get("orders", []) if r.status_code == 200 else []
 
 # --- Tabs del dashboard ---
