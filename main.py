@@ -72,10 +72,10 @@ with tab3:
     with st.expander("⚙️ Configurar personalidad del asistente", expanded=False):
         system_prompt = st.text_area(
             "System Prompt:",
-            value="""Eres el asistente virtual oficial de Inmaculada Coffee Farms / Safi Coffee Roasters.
-Respondes mensajes de clientes de Instagram de forma amable, profesional y concisa.
+            value="""Eres el asistente virtual oficial de Safi Coffee Roasters.
+Respondes mensajes de clientes de forma amable, profesional y concisa.
 
-PRODUCTOS: Café de especialidad en grano entero y molido. Exportamos internacionalmente.
+PRODUCTOS: Café de especialidad en grano entero y molido.
 [AGREGA: precios, tamaños, link tienda, WhatsApp]
 
 PREGUNTAS FRECUENTES:
