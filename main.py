@@ -25,8 +25,24 @@ client = Groq(api_key=GROQ_API_KEY)
 
 # --- Funciones Shopify ---
 @st.cache_data(ttl=300)
+def get_shopify_token():
+    url = f"https://{SHOPIFY_SHOP_DOMAIN}/admin/oauth/access_token"
+    payload = {
+        "client_id": os.environ.get("SHOPIFY_CLIENT_ID"),
+        "client_secret": os.environ.get("SHOPIFY_CLIENT_SECRET"),
+        "grant_type": "client_credentials"
+    }
+    r = requests.post(url, json=payload)
+    if r.status_code == 200:
+        return r.json().get("access_token")
+    return None
+
+@st.cache_data(ttl=3600)
 def get_all_orders():
-    headers = {"X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN}
+    token = get_shopify_token()
+    if not token:
+        return []
+    headers = {"X-Shopify-Access-Token": token}
     all_orders = []
     url = f"https://{SHOPIFY_SHOP_DOMAIN}/admin/api/2024-01/orders.json?limit=250&status=any"
     while url:
@@ -43,9 +59,12 @@ def get_all_orders():
         url = next_url
     return all_orders
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def get_products():
-    headers = {"X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN}
+    token = get_shopify_token()
+    if not token:
+        return []
+    headers = {"X-Shopify-Access-Token": token}
     url = f"https://{SHOPIFY_SHOP_DOMAIN}/admin/api/2024-01/products.json?limit=250"
     r = requests.get(url, headers=headers)
     return r.json().get("products", []) if r.status_code == 200 else []
