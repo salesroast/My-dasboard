@@ -25,16 +25,8 @@ client = Groq(api_key=GROQ_API_KEY)
 
 # --- Funciones Shopify ---
 @st.cache_data(ttl=300)
-def get_shopify_token():
-    # Si tienes un token permanente (shpat_...), úsalo directamente.
-    return SHOPIFY_ACCESS_TOKEN
-
-@st.cache_data(ttl=3600)
 def get_all_orders():
-    token = get_shopify_token()
-    if not token:
-        return []
-    headers = {"X-Shopify-Access-Token": token}
+    headers = {"X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN}
     all_orders = []
     url = f"https://{SHOPIFY_SHOP_DOMAIN}/admin/api/2024-01/orders.json?limit=250&status=any"
     while url:
@@ -51,12 +43,9 @@ def get_all_orders():
         url = next_url
     return all_orders
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)
 def get_products():
-    token = get_shopify_token()
-    if not token:
-        return []
-    headers = {"X-Shopify-Access-Token": token}
+    headers = {"X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN}
     url = f"https://{SHOPIFY_SHOP_DOMAIN}/admin/api/2024-01/products.json?limit=250"
     r = requests.get(url, headers=headers)
     return r.json().get("products", []) if r.status_code == 200 else []
@@ -217,16 +206,49 @@ with tab4:
     with st.expander("⚙️ Configurar personalidad del asistente", expanded=False):
         system_prompt = st.text_area(
             "System Prompt:",
-            value="""Eres el asistente virtual oficial de Safi Coffee Roasters / Inmaculada Coffee Farms.
-Respondes mensajes de clientes de Instagram de forma amable, profesional y concisa.
+            value="""Eres el asesor comercial oficial de Safi Coffee Roasters .
 
-PRODUCTOS: Café de especialidad en grano entero y molido. Exportamos internacionalmente.
-[AGREGA: precios, tamaños, link tienda, WhatsApp]
+Tu objetivo principal es VENDER y convertir conversaciones en pedidos.
 
-PREGUNTAS FRECUENTES:
-[AGREGA tus 3 preguntas más comunes]
+TONO:
+Amable, experto en café, cercano. Respuestas cortas (máx 3-4 líneas).
 
-TONO: Cálido, apasionado por el café. Máximo 3-4 oraciones. Responde en el idioma del cliente.""",
+PRODUCTOS:
+- Café de especialidad
+- Presentaciones: grano y molido
+- Origen: Colombia
+- Proceso: Lavado, honey, natural
+
+FLUJO DE VENTA:
+
+1. IDENTIFICAR
+- ¿Para casa o negocio?
+- ¿Prefiere grano o molido?
+
+2. RECOMENDAR
+Sugiere máximo 2 opciones claras.
+
+3. EDUCAR (ligero)
+Explica diferencia grano vs molido si aplica.
+
+4. CERRAR
+Siempre termina con una acción:
+- "¿Te gustaría que te comparta el link de compra?"
+- "¿Cuántas bolsas necesitas?"
+
+5. UPSELL
+- Ofrece 2 o 3 bolsas
+- Sugiere otro café
+
+OBJECIONES:
+- Precio → enfatiza calidad, origen y experiencia
+- Envío → explicar cobertura
+- Molido vs grano → recomendar según uso
+
+IMPORTANTE:
+- Nunca des respuestas largas
+- Siempre guía hacia compra
+- Responde en el idioma del cliente""",
             height=250,
         )
 
