@@ -5,43 +5,47 @@ from dotenv import load_dotenv
 import requests
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
 
 load_dotenv()
 
-# Credenciales
+# ==============================
+# CONFIG
+# ==============================
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 SHOPIFY_SHOP_DOMAIN = os.environ.get("SHOPIFY_SHOP_DOMAIN")
 SHOPIFY_ACCESS_TOKEN = os.environ.get("SHOPIFY_ACCESS_TOKEN")
 
 st.set_page_config(page_title="Safi Coffee Roasters", layout="wide", page_icon="☕")
-st.title("☕ Safi Coffee Roasters — Dashboard")
-
-if not GROQ_API_KEY:
-    st.error("⚠️ GROQ_API_KEY no configurada.")
-    st.stop()
+st.title("☕ SAFI — Dashboard & AI Sales Agent")
 
 client = Groq(api_key=GROQ_API_KEY)
 
-# --- Funciones Shopify ---
+# ==============================
+# SHOPIFY FUNCTIONS
+# ==============================
 @st.cache_data(ttl=300)
 def get_all_orders():
     headers = {"X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN}
-    all_orders = []
     url = f"https://{SHOPIFY_SHOP_DOMAIN}/admin/api/2024-01/orders.json?limit=250&status=any"
+    orders = []
+
     while url:
         r = requests.get(url, headers=headers)
         if r.status_code != 200:
             break
+
         data = r.json().get("orders", [])
-        all_orders.extend(data)
+        orders.extend(data)
+
         links = r.headers.get("Link", "")
         next_url = None
         for part in links.split(","):
             if 'rel="next"' in part:
                 next_url = part.split(";")[0].strip().strip("<>")
         url = next_url
-    return all_orders
+
+    return orders
+
 
 @st.cache_data(ttl=300)
 def get_products():
@@ -50,64 +54,46 @@ def get_products():
     r = requests.get(url, headers=headers)
     return r.json().get("products", []) if r.status_code == 200 else []
 
-# --- Tabs ---
-tab1, tab2, tab3, tab4 = st.tabs(["📊 KPIs", "📈 Ventas", "📦 Inventario", "🤖 Asistente IA"])
 
-# ============================================================
+# ==============================
+# PREPARAR CONTEXTO PARA IA
+# ==============================
+def build_product_context(products):
+    context = []
+    for p in products:
+        for v in p["variants"]:
+            if v.get("inventory_quantity", 0) > 0:
+                context.append(
+                    f"{p['title']} - {v['title']} | ${v['price']} | Stock: {v['inventory_quantity']} | SKU: {v.get('sku','')}"
+                )
+    return "\n".join(context[:20])  # limitamos para performance
+
+
+def generate_product_links(products):
+    links = {}
+    for p in products:
+        handle = p.get("handle")
+        for v in p["variants"]:
+            sku = v.get("sku")
+            if sku:
+                links[sku] = f"https://{SHOPIFY_SHOP_DOMAIN}/products/{handle}"
+    return links
+
+
+# ==============================
+# TABS
+# ==============================
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📊 KPIs",
+    "📈 Ventas",
+    "📦 Inventario",
+    "🤖 Vendedor IA"
+])
+
+# ==============================
 # TAB 1 — KPIs
-# ============================================================
+# ==============================
 with tab1:
-    st.subheader("Métricas clave")
-    orders = get_all_orders()
-
-    if orders:
-        df = pd.DataFrame([{
-            "fecha": pd.to_datetime(o["created_at"]).tz_localize(None) if pd.to_datetime(o["created_at"]).tzinfo is None else pd.to_datetime(o["created_at"]).tz_convert(None),
-            "total": float(o["total_price"]),
-            "estado_pago": o["financial_status"],
-            "estado_envio": o.get("fulfillment_status") or "pendiente",
-            "email": o.get("email", ""),
-            "numero": o["order_number"],
-        } for o in orders])
-
-        total_ingresos = df["total"].sum()
-        total_pedidos = len(df)
-        ticket_promedio = df["total"].mean()
-        pedidos_pendientes = len(df[df["estado_envio"] == "pendiente"])
-
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("💰 Ingresos totales", f"${total_ingresos:,.2f}")
-        col2.metric("🛒 Total pedidos", f"{total_pedidos:,}")
-        col3.metric("🎯 Ticket promedio", f"${ticket_promedio:,.2f}")
-        col4.metric("⏳ Pedidos pendientes", f"{pedidos_pendientes:,}")
-
-        st.divider()
-
-        # Pedidos por estado
-        col5, col6 = st.columns(2)
-        with col5:
-            estado_counts = df["estado_pago"].value_counts().reset_index()
-            estado_counts.columns = ["Estado", "Cantidad"]
-            fig = px.pie(estado_counts, values="Cantidad", names="Estado",
-                        title="Pedidos por estado de pago",
-                        color_discrete_sequence=px.colors.sequential.Greens)
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col6:
-            envio_counts = df["estado_envio"].value_counts().reset_index()
-            envio_counts.columns = ["Estado", "Cantidad"]
-            fig2 = px.pie(envio_counts, values="Cantidad", names="Estado",
-                         title="Pedidos por estado de envío",
-                         color_discrete_sequence=px.colors.sequential.Blues)
-            st.plotly_chart(fig2, use_container_width=True)
-    else:
-        st.info("No se pudieron cargar los pedidos.")
-
-# ============================================================
-# TAB 2 — VENTAS
-# ============================================================
-with tab2:
-    st.subheader("Análisis de ventas")
     orders = get_all_orders()
 
     if orders:
@@ -116,169 +102,120 @@ with tab2:
             "total": float(o["total_price"]),
         } for o in orders])
 
-        df["mes"] = df["fecha"].dt.to_period("M").astype(str)
-        df["semana"] = df["fecha"].dt.to_period("W").astype(str)
+        col1, col2, col3 = st.columns(3)
+        col1.metric("💰 Ingresos", f"${df['total'].sum():,.0f}")
+        col2.metric("🛒 Pedidos", len(df))
+        col3.metric("🎯 Ticket Promedio", f"${df['total'].mean():,.0f}")
+
+# ==============================
+# TAB 2 — VENTAS
+# ==============================
+with tab2:
+    orders = get_all_orders()
+
+    if orders:
+        df = pd.DataFrame([{
+            "fecha": pd.to_datetime(o["created_at"]).tz_convert(None),
+            "total": float(o["total_price"]),
+        } for o in orders])
+
         df["dia"] = df["fecha"].dt.date
+        df_group = df.groupby("dia")["total"].sum().reset_index()
 
-        agrupacion = st.selectbox("Agrupar por:", ["Día", "Semana", "Mes"])
-
-        if agrupacion == "Mes":
-            df_grupo = df.groupby("mes")["total"].sum().reset_index()
-            df_grupo.columns = ["Período", "Ventas"]
-        elif agrupacion == "Semana":
-            df_grupo = df.groupby("semana")["total"].sum().reset_index()
-            df_grupo.columns = ["Período", "Ventas"]
-        else:
-            df_grupo = df.groupby("dia")["total"].sum().reset_index()
-            df_grupo.columns = ["Período", "Ventas"]
-
-        fig = px.bar(df_grupo, x="Período", y="Ventas",
-                    title=f"Ventas por {agrupacion.lower()}",
-                    color="Ventas",
-                    color_continuous_scale="Greens")
-        fig.update_layout(xaxis_tickangle=-45)
+        fig = px.line(df_group, x="dia", y="total", title="Ventas diarias")
         st.plotly_chart(fig, use_container_width=True)
 
-        # Línea de tendencia
-        df_dia = df.groupby("dia")["total"].sum().reset_index()
-        df_dia.columns = ["Fecha", "Ventas"]
-        fig2 = px.line(df_dia, x="Fecha", y="Ventas",
-                      title="Tendencia de ventas diarias",
-                      color_discrete_sequence=["#2e7d32"])
-        st.plotly_chart(fig2, use_container_width=True)
-    else:
-        st.info("No se pudieron cargar las ventas.")
-
-# ============================================================
+# ==============================
 # TAB 3 — INVENTARIO
-# ============================================================
+# ==============================
 with tab3:
-    st.subheader("Productos e Inventario")
     products = get_products()
 
-    if products:
-        filas = []
-        for p in products:
-            for v in p["variants"]:
-                filas.append({
-                    "Producto": p["title"],
-                    "Variante": v["title"],
-                    "Precio": float(v["price"]),
-                    "Stock": v.get("inventory_quantity", 0),
-                    "SKU": v.get("sku", "—"),
-                })
+    filas = []
+    for p in products:
+        for v in p["variants"]:
+            filas.append({
+                "Producto": p["title"],
+                "Variante": v["title"],
+                "Precio": float(v["price"]),
+                "Stock": v.get("inventory_quantity", 0),
+                "SKU": v.get("sku", "")
+            })
 
-        df_prod = pd.DataFrame(filas)
+    df = pd.DataFrame(filas)
+    st.dataframe(df.sort_values("Stock"))
 
-        # Alerta stock bajo
-        stock_bajo = df_prod[df_prod["Stock"] <= 5]
-        if not stock_bajo.empty:
-            st.warning(f"⚠️ {len(stock_bajo)} variante(s) con stock bajo (≤ 5 unidades)")
-            st.dataframe(stock_bajo, use_container_width=True)
-            st.divider()
-
-        # Tabla completa
-        st.dataframe(
-            df_prod.sort_values("Stock"),
-            use_container_width=True,
-            column_config={
-                "Precio": st.column_config.NumberColumn("Precio", format="$%.2f"),
-                "Stock": st.column_config.NumberColumn("Stock", format="%d"),
-            }
-        )
-
-        # Gráfica top productos por precio
-        fig = px.bar(df_prod.sort_values("Precio", ascending=False).head(15),
-                    x="Variante", y="Precio",
-                    title="Top productos por precio",
-                    color="Precio",
-                    color_continuous_scale="Greens")
-        fig.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("No se pudieron cargar los productos.")
-
-# ============================================================
-# TAB 4 — ASISTENTE IA
-# ============================================================
+# ==============================
+# TAB 4 — IA VENDEDOR
+# ==============================
 with tab4:
-    st.subheader("Asistente Virtual")
-    with st.expander("⚙️ Configurar personalidad del asistente", expanded=False):
-        system_prompt = st.text_area(
-            "System Prompt:",
-            value="""Eres el asesor comercial oficial de Safi Coffee Roasters .
+    st.subheader("🤖 Asesor Comercial IA")
 
-Tu objetivo principal es VENDER y convertir conversaciones en pedidos.
+    products = get_products()
+    product_context = build_product_context(products)
+    product_links = generate_product_links(products)
 
-TONO:
-Amable, experto en café, cercano. Respuestas cortas (máx 3-4 líneas).
+    # PROMPT PRO
+    system_prompt = f"""
+Eres el asesor comercial de Safi Coffee Roasters.
 
-PRODUCTOS:
-- Café de especialidad
-- Presentaciones: grano y molido
-- Origen: Colombia
-- Proceso: Lavado, honey, natural
+OBJETIVO: vender y cerrar pedidos.
 
-FLUJO DE VENTA:
+Reglas:
+- Respuestas cortas (máx 3 líneas)
+- Siempre hacer pregunta para cerrar venta
+- Recomendar máximo 2 productos
+- Usar info real de productos
 
-1. IDENTIFICAR
-- ¿Para casa o negocio?
-- ¿Prefiere grano o molido?
+Productos disponibles:
+{product_context}
 
-2. RECOMENDAR
-Sugiere máximo 2 opciones claras.
+Flujo:
+1. Preguntar necesidad
+2. Recomendar
+3. Cerrar con acción (link o cantidad)
 
-3. EDUCAR (ligero)
-Explica diferencia grano vs molido si aplica.
+Si cliente quiere comprar:
+- Usa SKU para dar link
+"""
 
-4. CERRAR
-Siempre termina con una acción:
-- "¿Te gustaría que te comparta el link de compra?"
-- "¿Cuántas bolsas necesitas?"
+    if "chat" not in st.session_state:
+        st.session_state.chat = []
 
-5. UPSELL
-- Ofrece 2 o 3 bolsas
-- Sugiere otro café
-
-OBJECIONES:
-- Precio → enfatiza calidad, origen y experiencia
-- Envío → explicar cobertura
-- Molido vs grano → recomendar según uso
-
-IMPORTANTE:
-- Nunca des respuestas largas
-- Siempre guía hacia compra
-- Responde en el idioma del cliente""",
-            height=250,
-        )
-
-    if "mensajes" not in st.session_state:
-        st.session_state.mensajes = []
-
-    for msg in st.session_state.mensajes:
+    for msg in st.session_state.chat:
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
 
-    mensaje_usuario = st.chat_input("Escribe un mensaje como cliente de Instagram...")
+    user_input = st.chat_input("Escribe como cliente...")
 
-    if mensaje_usuario:
-        st.session_state.mensajes.append({"role": "user", "content": mensaje_usuario})
+    if user_input:
+        st.session_state.chat.append({"role": "user", "content": user_input})
+
         with st.chat_message("user"):
-            st.write(mensaje_usuario)
+            st.write(user_input)
+
         with st.chat_message("assistant"):
-            with st.spinner("Pensando..."):
-                respuesta = client.chat.completions.create(
+            with st.spinner("Vendiendo..."):
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        *st.session_state.mensajes
-                    ],
-                    model="llama-3.3-70b-versatile",
+                        *st.session_state.chat
+                    ]
                 )
-                contenido = respuesta.choices[0].message.content
-                st.write(contenido)
-        st.session_state.mensajes.append({"role": "assistant", "content": contenido})
 
-    if st.session_state.mensajes:
-        if st.button("🗑️ Limpiar conversación"):
-            st.session_state.mensajes = []
-            st.rerun()
+                reply = response.choices[0].message.content
+
+                # 🔥 INYECTAR LINK AUTOMÁTICO
+                for sku, link in product_links.items():
+                    if sku in reply:
+                        reply += f"\n👉 Compra aquí: {link}"
+                        break
+
+                st.write(reply)
+
+        st.session_state.chat.append({"role": "assistant", "content": reply})
+
+    if st.button("🗑️ Limpiar chat"):
+        st.session_state.chat = []
+        st.rerun()
